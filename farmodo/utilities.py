@@ -19,3 +19,8 @@ def browseValue(suffix,userValue):
     inpath = modo.dialogs.customFile('fileOpen', 'Open File', ('text',), ('Text File',), ('*.'+suffix,))
     lx.eval("user.value %s %s" % (userValue,inpath))
 
+def interpretOutPattern():
+    lx.out('Will Interpret Out pattern')
+    scene = modo.Scene()
+    outPat = scene.renderItem.channel('outPat').get()
+    print outPat
