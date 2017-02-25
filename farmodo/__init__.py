@@ -7,8 +7,8 @@ from PySide.QtGui import *
 import farmodo
 import os
 
-BIG_FONT = QFont("Helvetica", 24,QFont.Bold)
-MEDIUM_FONT = QFont("Helvetica", 18,QFont.Bold)
+BIG_FONT = QFont("Helvetica", 18,QFont.Bold)
+MEDIUM_FONT = QFont("Helvetica", 12,QFont.Bold)
 FIRST = 'Start'
 LAST='End'
 STEP ='Step'
@@ -63,7 +63,7 @@ def renderJobQuery(layout):
         for i in range(layout.count()):
             widgetItem = layout.itemAt(i)
             if widgetItem.widget().isChecked():
-                layers.append(scene.renderPassGroups[rjMenu.currentIndex()].passes[i].name)
+                layers.append(scene.renderPassGroups[renderJobMenu.currentIndex()].passes[i].name)
         return layers
 
 def renderPassQuery(layout):
@@ -102,7 +102,7 @@ def renderButtonClicked():
     list.append(timeLimit.value())
     list.append(priority.value())
     list.append(str(dbPathEdit.text()))
-    list.append(str(rjMenu.currentText()))
+    list.append(str(renderJobMenu.currentText()))
     list.append(",".join(renderJobQuery(rjLayout)))
 
     jobs = len(jobList)
@@ -130,21 +130,29 @@ def getImageFolder():
 
 def buildSubmitterLayout(widget):
 
+    def makeRenderJobCheckboxes(index):
+        #index = (len(modo.Scene().renderPassGroups)-(index-1))
+        index -= 1
+        # if index < 0:
+        #     index = renderJobLayout.count()
+        if renderJobLayout is not None:
+            while renderJobLayout.count()>1:
+                widget = renderJobLayout.takeAt(1).widget()
+                widget.deleteLater()
+                #renderJobLayout.removeItem(renderJobLayout.itemAt(1))
+        for renderPass in modo.Scene().renderPassGroups[index].passes:
+            checkBox = QCheckBox(str(renderPass.name))
+            checkBox.setChecked(renderPass.enabled)
+            renderJobLayout.addWidget(checkBox)
+
     def makeRenderPassCheckboxes(index):
         if rpgLayout is not None:
             clearLayout(rpgLayout)
         for renderPass in modo.Scene().renderPassGroups[index].passes:
-            renderLayerBox = QCheckBox(str(renderPass.name))
-            renderLayerBox.setChecked(renderPass.enabled)
-            rpgLayout.addWidget(renderLayerBox)
+            checkBox = QCheckBox(str(renderPass.name))
+            checkBox.setChecked(renderPass.enabled)
+            rpgLayout.addWidget(checkBox)
 
-    def makeRenderJobCheckboxes(index):
-        if rjLayout is not None:
-            clearLayout(rjLayout)
-        for renderPass in modo.Scene().renderPassGroups[index].passes:
-            renderJobBox = QCheckBox(str(renderPass.name))
-            renderJobBox.setChecked(renderPass.enabled)
-            rjLayout.addWidget(renderJobBox)
 
     def getRootPath():
         os.path.split(__file__)[0]
@@ -164,7 +172,7 @@ def buildSubmitterLayout(widget):
 
     #widget.setStyleSheet(cssString)
 
-
+    widget.setStyleSheet("QGroupBox {style: plastique; border-image: none; border-style: solid; border-radius : 6px;border-width: 1px ; border-color: #353535}")
 
     scene = modo.Scene()
     renderItem = scene.renderItem
@@ -184,44 +192,51 @@ def buildSubmitterLayout(widget):
     spinBoxStep.setValue(renderItem.channel('step').get())
 
     #render camera buttons
+    cameraBox = QGroupBox('Render Camera')
     radioLayout = QVBoxLayout()
     for camera in scene.cameras:
         radioLayout.addWidget(QRadioButton(camera.name))
     (radioLayout.itemAt(scene.renderCamera.index).widget()).setChecked(True)
+    cameraBox.setLayout(radioLayout)
+
 
     #make frame range form layout
-    frameRangeBox = QGroupBox('Frame Range')
-
+    frameRangeOutline = QGroupBox('Frame Range')
     frameRangeLayout = QFormLayout()
     frameRangeLayout.addRow(FIRST,spinBoxStart)
     frameRangeLayout.addRow(LAST,spinBoxEnd)
     frameRangeLayout.addRow(STEP,spinBoxStep)
-    frameRangeBox.setLayout(frameRangeLayout)
-    frameRangeBox.setStyleSheet("QGroupBox {border-image: none; border-style: solid; border-radius : 6px;border-width: 1px ; border-color: #353535;padding-top:20px; min-height:100px}")
+    frameRangeOutline.setLayout(frameRangeLayout)
 
 
-    #make a combo box of all render pass jobs
-    rjMenu = QComboBox()
-    rjList = [""]
-    #make a layout to contain passes
-    rjLayout = PySide.QtGui.QVBoxLayout()
+    #outline render pass job category
+    renderPassOutline = QGroupBox('Render Jobs initialised with pass')
+    #make a vertical box layout
+    renderJobLayout = QVBoxLayout()
+    #and put it in the outline
+
+
+    #make a combo box of all render jobs from passes
+    renderJobMenu = QComboBox()
     #check if there are any render pass groups
-    rjList = ([rpg.name for rpg in scene.renderPassGroups])
-    rjList.append("-Single Job-")
-    rjMenu.addItems(rjList)
+    renderJobList = ["-Single Job-"]+([rpg.name for rpg in scene.renderPassGroups])
+    renderJobMenu.addItems(renderJobList)
+    renderJobLayout.addWidget(renderJobMenu)
+
     #make pass check boxes for current rpg
     i=0
-    rjMenu.setCurrentIndex(len(rjList)-1)
+    renderJobMenu.setCurrentIndex(0)
 
     #connecting refresh on rj change
-    #rjMenu.currentIndexChanged.connect(farmodo.makeRenderJobCheckboxes)
-    rjMenu.currentIndexChanged.connect(makeRenderJobCheckboxes)
+    renderJobMenu.currentIndexChanged.connect(makeRenderJobCheckboxes)
+    renderPassOutline.setLayout(renderJobLayout)
 
     #make a combo box of all render pass groups
+    rpgOutline = QGroupBox('Render Passes per Job')
     rpgMenu = QComboBox()
+    rpgLayout = QVBoxLayout()
     rpgList = [""]
-    #make a layout to contain passes
-    rpgLayout = PySide.QtGui.QVBoxLayout()
+
     #check if there are any render pass groups
     if scene.renderPassGroups:
         rpgList = ([rpg.name for rpg in scene.renderPassGroups])
@@ -239,6 +254,8 @@ def buildSubmitterLayout(widget):
         rpgMenu.addItems(rpgList)
     #connecting refresh on rpg change
     rpgMenu.currentIndexChanged.connect(makeRenderPassCheckboxes)
+    rpgLayout.addWidget(rpgMenu)
+    rpgOutline.setLayout(rpgLayout)
 
     #make imagename box using scene name as default
     imageNameEdit = QLineEdit()
@@ -281,12 +298,14 @@ def buildSubmitterLayout(widget):
     layout.addWidget(tabwidget)
 
     generalTabWidget = PySide.QtGui.QWidget()
-    tabwidget.addTab(generalTabWidget, 'General')
+    tabwidget.addTab(generalTabWidget, 'Submit')
 
 
     generalLayout = QVBoxLayout(generalTabWidget)
-    generalLayout.addWidget(frameRangeBox)
-
+    generalLayout.addWidget(frameRangeOutline)
+    generalLayout.addWidget(cameraBox)
+    renderJobLayout.addWidget(renderJobMenu)
+    generalLayout.addLayout(renderJobLayout)
     #testWidget = QFrame()
     #testWidget.setFixedSize(100,100)
     #testWidget.setObjectName("myWidget")
@@ -300,22 +319,15 @@ def buildSubmitterLayout(widget):
 
 
     #make camera box
-    cameraBox = QVBoxLayout()
-    renCamLabel = QLabel(('Render Camera'))
-    cameraBox.addWidget(renCamLabel)
-    cameraBox.addLayout(radioLayout)
-    generalLayout.addLayout(cameraBox)
 
 
-    generalLayout.addWidget(QLabel('Render Pass Jobs (initial pass)'))
-    generalLayout.addWidget(rjMenu)
-    generalLayout.addLayout(rjLayout)
 
-    generalLayout.addWidget(QLabel('Render Passes (per Job)'))
-    generalLayout.addWidget(rpgMenu)
-    generalLayout.addLayout(rpgLayout)
 
-    generalLayout.addWidget(farmodo.HLine())
+    #generalLayout.addWidget(QLabel('Render Pass Jobs (initial pass)'))
+    generalLayout.addWidget(renderPassOutline)
+
+    #generalLayout.addWidget(QLabel('Render Passes (per Job)'))
+
 
     generalLayout.addWidget(QLabel('Image Name'))
     generalLayout.addWidget(imageNameEdit)
