@@ -6,6 +6,7 @@ import PySide
 from PySide.QtGui import *
 import farmodo
 import os
+import re
 
 BIG_FONT = QFont("Helvetica", 18,QFont.Bold)
 MEDIUM_FONT = QFont("Helvetica", 12,QFont.Bold)
@@ -16,15 +17,42 @@ STEP ='Step'
 renderPassLayout = QVBoxLayout()
 renderJobLayout = QVBoxLayout()
 renderPassLayout = QVBoxLayout()
+cameraRadioButtonLayout = QVBoxLayout()
 outPatternPreview = QTextBrowser()
 imageNameEdit = QLineEdit()
 imageFormatMenu = QComboBox()
 imageFormatInternalName = ['']
 imageFormatUserName = ['']
 imageFormatSuffix = ['']
+imagePathEdit = QLineEdit()
+spinBoxStart = QSpinBox()
+spinBoxEnd = QSpinBox()
 
 from submitter import *
 from utilities import *
+
+def replaceFsWithFrameRange(outPat):
+    endPad = ''
+    scene = modo.Scene()
+    found = re.search('<F*.>',outPat)
+    if not found:
+        return outPat
+    start = (spinBoxStart.value())
+    end = (spinBoxEnd.value())
+    startPad = str(start)
+    endPad = str(end)
+    # end = str(scene.renderItem.channel('first').get())
+    while len(startPad)<(len(found.group(0))-2):
+        startPad = '0' + startPad
+    if start == end:
+        return outPat.replace(found.group(0),startPad)
+    else:
+        while len(endPad)<(len(found.group(0))-2):
+            endPad = '0' + endPad
+        return outPat.replace(found.group(0),(startPad + '-' + endPad))
+
+    # return outPat.replace(r.group(0),startPad)
+
 
 def updateOutPatternPreview():
     print'Update out pattern preview'
@@ -33,23 +61,26 @@ def updateOutPatternPreview():
     imageNameList=''
     imageName = imageNameEdit.text()
     imageFormat = imageFormatInternalName[(imageFormatMenu.currentIndex())]
-    frame = '0001'
     LRCam = ''
     i=0
     outPatList=''
-    for eachJob in layoutWidgetQuery(renderJobLayout):
-        for eachPass in layoutWidgetQuery(renderPassLayout):
-            currentPat =imageName + scene.renderItem.channel('outPat').get()
-            renderOutput =  scene.items('renderOutput')[i].name
-            currentPat = currentPat.replace('[<pass>]',eachPass)
-            currentPat = currentPat.replace('[<initialPass>]',eachJob)
-            currentPat = currentPat.replace('<FFFF>',frame)
-            currentPat = currentPat.replace('[<output>]',renderOutput)
-            currentPat = currentPat.replace('[<LR>]',LRCam)
-            currentPat = currentPat.replace('<none>','')
-            currentPat  += imageFormatSuffix[(imageFormatMenu.currentIndex())]
-            currentPat += '\n'
-            outPatList += currentPat
+    for eachCamera in layoutWidgetQuery(cameraRadioButtonLayout):
+        for eachJob in layoutWidgetQuery(renderJobLayout):
+            for eachPass in layoutWidgetQuery(renderPassLayout):
+                currentPat = imageName + scene.renderItem.channel('outPat').get()
+                currentPat = replaceFsWithFrameRange(currentPat)
+                renderOutput =  scene.items('renderOutput')[i].name
+                currentPat = currentPat.replace('[','')
+                currentPat = currentPat.replace(']','')
+                currentPat = currentPat.replace('<pass>',eachPass)
+                currentPat = currentPat.replace('<initialPass>',eachJob)
+                currentPat = currentPat.replace('<output>',renderOutput)
+                currentPat = currentPat.replace('<LR>',LRCam)
+                currentPat = currentPat.replace('<camera>',eachCamera)
+                currentPat = currentPat.replace('<none>','')
+                currentPat  += '.' + imageFormatSuffix[(imageFormatMenu.currentIndex())]
+                currentPat += '\n'
+                outPatList += currentPat
     print outPatList
     outPatternPreview.setText(outPatList)
 
@@ -70,7 +101,10 @@ def layoutWidgetQuery(layout):
     print layers
     return layers
 
-
+def selectedCamera():
+    for i in range(cameraRadioButtonLayout.count()):
+        if((cameraRadioButtonLayout.itemAt(i).widget()).isChecked()):
+            return (str((cameraRadioButtonLayout.itemAt(i).widget()).text()))
 
 
 def submitToDB(paras):
@@ -139,9 +173,9 @@ def renderButtonClicked():
     list.append(spinBoxStart.value())
     list.append(spinBoxEnd.value())
     list.append(spinBoxStep.value())
-    for i in range(radioLayout.count()):
-        if((radioLayout.itemAt(i).widget()).isChecked()):
-            list.append(str((radioLayout.itemAt(i).widget()).text()))
+    for i in range(cameraRadioButtonLayout.count()):
+        if((cameraRadioButtonLayout.itemAt(i).widget()).isChecked()):
+            list.append(str((cameraRadioButtonLayout.itemAt(i).widget()).text()))
     #list.append(str(renderCamMenu.currentText()))
     list.append(",".join(renderPassQuery(renderPassLayout)))
     list.append(str(renderPassPopUp.currentText()))
@@ -237,11 +271,10 @@ def buildSubmitterLayout(widget):
     renderItem = scene.renderItem
     #frame range buttons
 
-    spinBoxStart = QSpinBox()
     spinBoxStart.setFont(BIG_FONT)
     spinBoxStart.setRange(-999999, 999999)
     spinBoxStart.setValue(renderItem.channel('first').get())
-    spinBoxEnd = QSpinBox()
+    spinBoxStart.editingFinished.connect(updateOutPatternPreview)
     spinBoxEnd.setFont(BIG_FONT)
     spinBoxEnd.setRange(-999999, 999999)
     spinBoxEnd.setValue(renderItem.channel('last').get())
@@ -252,17 +285,16 @@ def buildSubmitterLayout(widget):
 
     #render camera buttons
     cameraBox = QGroupBox('Render Camera')
-    radioLayout = QVBoxLayout()
     for camera in scene.cameras:
-        radioLayout.addWidget(QRadioButton(camera.name))
-    (radioLayout.itemAt(scene.renderCamera.index).widget()).setChecked(True)
-    cameraBox.setLayout(radioLayout)
-
+        camRadioButton = QCheckBox(str(camera.name))
+        cameraRadioButtonLayout.addWidget(camRadioButton)
+        camRadioButton.toggled.connect(updateOutPatternPreview)
+    (cameraRadioButtonLayout.itemAt(scene.renderCamera.index).widget()).setChecked(True)
+    cameraBox.setLayout(cameraRadioButtonLayout)
 
     #make frame range form layout
     frameRangeOutline = QGroupBox('Frame Range')
     frameRangeLayout = QFormLayout()
-    frameRangeLayout.setAlignment(kjh)
     frameRangeLayout.addRow(FIRST,spinBoxStart)
     frameRangeLayout.addRow(LAST,spinBoxEnd)
     frameRangeLayout.addRow(STEP,spinBoxStep)
@@ -322,13 +354,15 @@ def buildSubmitterLayout(widget):
         defaultPath += "/Renders/Frames/"
     except:
         defaultPath =''
-    imagePathEdit = QLineEdit()
+
     imagePathEdit.setText(defaultPath)
-    imagePathBrowse = QPushButton("browse image folder")
+    imagePathBrowse = QPushButton("browse")
     imagePathBrowse.clicked.connect(farmodo.getImageFolder)
 
     imageFormLayout.addRow('Image Base Name',imageNameEdit)
-    imageFormLayout.addRow(imagePathBrowse,imagePathEdit)
+    imageBrowseFormLayout=QFormLayout()
+    imageBrowseFormLayout.addRow(imagePathBrowse,imagePathEdit)
+    imageFormLayout.addRow("Image Folder",imageBrowseFormLayout)
     imageFormLayout.addRow('Image Format',imageFormatMenu)
 
 
