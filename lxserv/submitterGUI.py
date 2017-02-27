@@ -68,7 +68,6 @@ class submitterGUI_Class(lxifc.CustomView):
         # convert to PySide QWidget
         widget = lx.getQWidget(parent)
 
-
         # Check that it succeeds
         if widget is not None:
             farmodo.buildSubmitterLayout(widget)
