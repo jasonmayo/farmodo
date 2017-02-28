@@ -4,15 +4,16 @@ import lxu.command
 import modo
 import PySide
 from PySide.QtGui import *
+from PySide.QtCore import *
+from PySide.QtSql import *
 import farmodo
 import os
 import re
+from datetime import date, datetime
+import sqlite3 as lite
 
 BIG_FONT = QFont("Helvetica", 18,QFont.Bold)
 MEDIUM_FONT = QFont("Helvetica", 12,QFont.Bold)
-FIRST = 'Start'
-LAST='End'
-STEP ='Step'
 
 renderPassLayout = QVBoxLayout()
 renderJobLayout = QVBoxLayout()
@@ -27,18 +28,110 @@ imageFormatSuffix = ['']
 imagePathEdit = QLineEdit()
 spinBoxStart = QSpinBox()
 spinBoxEnd = QSpinBox()
+spinBoxStep = QSpinBox()
+jobsPerStep = QCheckBox('Job per Step')
+passList = {}
+initialPass = {}
+cameraList = {}
 
+# passList = {'colour':('red','black','blue')}
+# initialPass = {'wheels':('steel')}
 from submitter import *
 from utilities import *
+from renderModo import *
 
-def replaceFsWithFrameRange(outPat):
+
+def dict2Text(dict):
+	return str(dict).replace('{','').replace('}','').replace("'","").replace("(","").replace(")","").replace(" ","").replace("[","").replace("]","")
+
+def submitToDB():
+    newId = 0
+    #message
+    lx.out("submitting current scene farm database")
+    #sqlite_file = '/Users/jasonmayo/Documents/qt/renderFarm/blottoFarmDB.db'
+    sqlite_file = lx.eval("user.value farmodo_pathToDB ?")
+    conn = lite.connect(sqlite_file)
+    cur = conn.cursor()
+    newId = cur.lastrowid
+    job={}
+    passList = layoutWidgetQuery(renderPassLayout)
+    initialPass = layoutWidgetQuery(renderJobLayout)
+    cameraList = layoutWidgetQuery(cameraRadioButtonLayout)
+
+    for eachRange in frameRangesByStep(spinBoxStart.value(),spinBoxEnd.value(),spinBoxStep.value()):
+        for eachCamera in cameraList[cameraList.keys()[0]]:
+            for eachJob in initialPass[initialPass.keys()[0]]:
+                idNum = newId
+                first = eachRange.split('-')[0]
+                last = eachRange.split('-')[1]
+                step = str(spinBoxStep.value())
+                scene = modo.Scene().filename
+                status = "pending"
+                now = datetime.now().strftime('%c')
+                priority = '1'
+                initialPassString = str(initialPass.keys()[0])+":"+eachJob
+                passListString = dict2Text(passList)
+                imageFormat = imageFormatSuffix[(imageFormatMenu.currentIndex())]
+                timeLimit = '200'
+                imageFile = str(imageNameEdit.text())
+                application = 'modo'
+                camera = eachCamera
+                cur.execute("INSERT INTO renderJobs(id,scenePath,start,end,step,camera,initialPass,passes,imageFile,imageFormat,status,timeSubmitted,timeLimit,priority,application) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(idNum,scene,first,last,step,camera,initialPassString,passListString,imageFile,imageFormat,status,now,timeLimit,priority,application))
+                if cur.lastrowid:
+                    lx.out("job submitted with id %s" % (cur.lastrowid))
+                    newId = cur.lastrowid +1
+
+                # cur.execute("INSERT INTO renderJobs(id,scenePath,start,end,step,camera,initialPass,passes,passGroup,imageFile,imageFormat,status,timeSubmitted,timeLimit,priority,application) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(newId,menuData[0],start,menuData[2],menuData[3],menuData[4],initialPass,menuData[5],menuData[6],imagePath,menuData[8],status,now,menuData[9],menuData[10],"modo"))
+                # with open("/Users/jasonmayo/Desktop/sqlCmd.txt", "w") as text_file:
+                #     text_file.write(sqlCmd)""
+                # if cur.lastrowid:
+                #     lx.out("job submitted with id %s" % (cur.lastrowid))
+                #     newId = cur.lastrowid +1
+    # try:
+    #     for job in jobList:
+    #         status = "pending"
+    #         now = datetime.now().strftime('%c')
+    #         minMachines = 1
+    #         priority = 1
+    #         initialPass = menuData[12] + ":" + job
+    #         if (len(jobList)>1) and ("<initialPass>" not in outPat):
+    #             imagePath = menuData[7] + "_" + job
+    #         while machine < step:#assign a machine for each step
+    #             cur.execute("INSERT INTO renderJobs(id,scenePath,start,end,step,camera,initialPass,passes,passGroup,imageFile,imageFormat,status,timeSubmitted,timeLimit,priority,application) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(newId,menuData[0],start,menuData[2],menuData[3],menuData[4],initialPass,menuData[5],menuData[6],imagePath,menuData[8],status,now,menuData[9],menuData[10],"modo"))
+    #             if cur.lastrowid:
+    #                 lx.out("job submitted with id %s" % (cur.lastrowid))
+    #                 newId = cur.lastrowid +1
+    #             start +=1
+    #             machine +=1
+    conn.commit()
+    conn.close()
+    # except lite.Error as er:
+    #     modo.dialogs.alert("ERROR", er.message, dtype='info')
+
+
+
+def frameRangesByStep(first,last,step):
+    ranges=[]
+    frames = (last+1) - first
+    if step <1:
+    	step =1
+    if jobsPerStep.isChecked():
+        for i in range(step):
+        	print first + i
+        	ranges.append(str(first + i) + '-' + str(frames-((last)-(first+i))%step))
+    else:
+        ranges.append(str(first)+ '-' +str(last))
+    return ranges
+def replaceFsWithFrameRange(outPat,start,end):
     endPad = ''
     scene = modo.Scene()
     found = re.search('<F*.>',outPat)
     if not found:
         return outPat
-    start = (spinBoxStart.value())
-    end = (spinBoxEnd.value())
+    if not start:
+        start = (spinBoxStart.value())
+    if not end:
+        end = (spinBoxEnd.value())
     startPad = str(start)
     endPad = str(end)
     # end = str(scene.renderItem.channel('first').get())
@@ -63,59 +156,71 @@ def updateOutPatternPreview():
     imageFormat = imageFormatInternalName[(imageFormatMenu.currentIndex())]
     LRCam = ''
     i=0
+    j=1
     outPatList=''
-    for eachCamera in layoutWidgetQuery(cameraRadioButtonLayout):
-        for eachJob in layoutWidgetQuery(renderJobLayout):
-            for eachPass in layoutWidgetQuery(renderPassLayout):
-                currentPat = imageName + scene.renderItem.channel('outPat').get()
-                currentPat = replaceFsWithFrameRange(currentPat)
-                renderOutput =  scene.items('renderOutput')[i].name
-                currentPat = currentPat.replace('[','')
-                currentPat = currentPat.replace(']','')
-                currentPat = currentPat.replace('<pass>',eachPass)
-                currentPat = currentPat.replace('<initialPass>',eachJob)
-                currentPat = currentPat.replace('<output>',renderOutput)
-                currentPat = currentPat.replace('<LR>',LRCam)
-                currentPat = currentPat.replace('<camera>',eachCamera)
-                currentPat = currentPat.replace('<none>','')
-                currentPat  += '.' + imageFormatSuffix[(imageFormatMenu.currentIndex())]
-                currentPat += '\n'
-                outPatList += currentPat
+    passList = layoutWidgetQuery(renderPassLayout)
+    initialPass = layoutWidgetQuery(renderJobLayout)
+    cameraList = layoutWidgetQuery(cameraRadioButtonLayout)
+    for eachRange in frameRangesByStep(spinBoxStart.value(),spinBoxEnd.value(),spinBoxStep.value()):
+        for eachCamera in cameraList[cameraList.keys()[0]]:
+            for eachJob in initialPass[initialPass.keys()[0]]:
+                outPatList += 'job#'+ str(j) +'\n'
+                j+=1
+                for eachPass in passList[passList.keys()[0]]:
+                    for eachOutput in renderOutputQuery(True):
+                        currentPat = imageName + scene.renderItem.channel('outPat').get()
+                        currentPat = replaceFsWithFrameRange(currentPat, eachRange.split('-')[0],eachRange.split('-')[1])
+                        renderOutput =  eachOutput
+                        currentPat = currentPat.replace('[','')
+                        currentPat = currentPat.replace(']','')
+                        currentPat = currentPat.replace('<pass>',eachPass)
+                        currentPat = currentPat.replace('<initialPass>',eachJob)
+                        currentPat = currentPat.replace('<output>',renderOutput)
+                        currentPat = currentPat.replace('<LR>',LRCam)
+                        currentPat = currentPat.replace('<camera>',eachCamera)
+                        currentPat = currentPat.replace('<none>','')
+                        currentPat  += '.' + imageFormatSuffix[(imageFormatMenu.currentIndex())]
+                        currentPat += '\n'
+                        outPatList += currentPat
     print outPatList
     outPatternPreview.setText(outPatList)
+
+def renderOutputQuery(noAlpha):
+    scene= modo.Scene()
+    outputList =[]
+    for output in scene.items(itype = 'renderOutput'):
+        if not (output.channel('enable').get()):
+            continue
+        elif noAlpha and (output.channel('effect').get() != 'shade.alpha'):
+    		outputList.append(output.name)
+        elif not noAlpha:
+            outputList.append(output.name)
+    return(outputList)
 
 def layoutWidgetQuery(layout):
     scene = modo.Scene()
     layers=[]
+    key = ''
     print(layout.count())
     for i in range(layout.count()):
         widgetItem = layout.itemAt(i)
-        try:
+        widgetClass = str(widgetItem.widget().__class__)
+        if 'QComboBox' in widgetClass:
+            key = str(widgetItem.widget().currentText())
+        elif 'QCheckBox' in widgetClass:
             if widgetItem.widget().isChecked():
                 print widgetItem.widget().text()
                 layers.append(str(widgetItem.widget().text()))
-        except:
-            print'ignored widget'
     if not len(layers):
         layers.append('')
-    print layers
-    return layers
+    print 'dict'+str( {key:layers})
+    return {key:layers}
 
 def selectedCamera():
     for i in range(cameraRadioButtonLayout.count()):
         if((cameraRadioButtonLayout.itemAt(i).widget()).isChecked()):
             return (str((cameraRadioButtonLayout.itemAt(i).widget()).text()))
 
-
-def submitToDB(paras):
-    print 'first:' + str(paras['first'])
-    print 'step:' + str(paras['step'])
-
-def HLine():
-                toto = QFrame()
-                toto.setFrameShape(QFrame.HLine)
-                toto.setFrameShadow(QFrame.Sunken)
-                return toto
 
 def get_imagesavers():
 #""" Returns a list of available image savers. Each entry in the returned list
@@ -248,21 +353,14 @@ def makeRenderPassCheckboxes(index):
 
 def buildSubmitterLayout(widget):
 
-
+    # try:
+    #     cssString = QString('')
+    # except:
+    #     QString = type("")
+    #     cssString = QString("")
     #
-    # def getRootPath():
-    #     os.path.split(__file__)[0]
-    #
-    #
-
-    try:
-        cssString = QString('')
-    except:
-        QString = type("")
-        cssString = QString("")
-
-    with open((os.path.split(__file__)[0] + '/style.css'), 'r') as cssFile:
-        cssString = QString(cssFile.read())
+    # with open((os.path.split(__file__)[0] + '/style.css'), 'r') as cssFile:
+    #     cssString = QString(cssFile.read())
 
     #widget.setStyleSheet(cssString)
 
@@ -270,7 +368,6 @@ def buildSubmitterLayout(widget):
     scene = modo.Scene()
     renderItem = scene.renderItem
     #frame range buttons
-
     spinBoxStart.setFont(BIG_FONT)
     spinBoxStart.setRange(-999999, 999999)
     spinBoxStart.setValue(renderItem.channel('first').get())
@@ -278,10 +375,15 @@ def buildSubmitterLayout(widget):
     spinBoxEnd.setFont(BIG_FONT)
     spinBoxEnd.setRange(-999999, 999999)
     spinBoxEnd.setValue(renderItem.channel('last').get())
-    spinBoxStep = QSpinBox()
+    spinBoxEnd.editingFinished.connect(updateOutPatternPreview)
     spinBoxStep.setFont(BIG_FONT)
     spinBoxStep.setRange(0, 999999)
     spinBoxStep.setValue(renderItem.channel('step').get())
+    spinBoxStep.editingFinished.connect(updateOutPatternPreview)
+    stepFormLayout = QFormLayout()
+    jobsPerStep.setChecked(True)
+    jobsPerStep.clicked.connect(updateOutPatternPreview)
+    stepFormLayout.addRow(spinBoxStep,jobsPerStep)
 
     #render camera buttons
     cameraBox = QGroupBox('Render Camera')
@@ -295,9 +397,9 @@ def buildSubmitterLayout(widget):
     #make frame range form layout
     frameRangeOutline = QGroupBox('Frame Range')
     frameRangeLayout = QFormLayout()
-    frameRangeLayout.addRow(FIRST,spinBoxStart)
-    frameRangeLayout.addRow(LAST,spinBoxEnd)
-    frameRangeLayout.addRow(STEP,spinBoxStep)
+    frameRangeLayout.addRow('First',spinBoxStart)
+    frameRangeLayout.addRow('Last',spinBoxEnd)
+    frameRangeLayout.addRow('Step',stepFormLayout)
     frameRangeOutline.setLayout(frameRangeLayout)
 
 
@@ -359,11 +461,11 @@ def buildSubmitterLayout(widget):
     imagePathBrowse = QPushButton("browse")
     imagePathBrowse.clicked.connect(farmodo.getImageFolder)
 
-    imageFormLayout.addRow('Image Base Name',imageNameEdit)
+    imageFormLayout.addRow('Base Name',imageNameEdit)
     imageBrowseFormLayout=QFormLayout()
     imageBrowseFormLayout.addRow(imagePathBrowse,imagePathEdit)
-    imageFormLayout.addRow("Image Folder",imageBrowseFormLayout)
-    imageFormLayout.addRow('Image Format',imageFormatMenu)
+    imageFormLayout.addRow("Folder",imageBrowseFormLayout)
+    imageFormLayout.addRow('Format',imageFormatMenu)
 
 
     #make image format menu
@@ -381,8 +483,9 @@ def buildSubmitterLayout(widget):
     # create main layout
     masterLayout = PySide.QtGui.QVBoxLayout()
     renderButton = QPushButton("Submit")
+    renderButton.setStyleSheet("QPushButton { background-color: #f89a2b; color: black; font-size:24px}")
     # This connects the "clicked" signal of the submit button to the function above
-    renderButton.clicked.connect(farmodo.renderButtonClicked)
+    renderButton.clicked.connect(farmodo.submitToDB)
 
     #making tabbed widget
 
@@ -391,8 +494,6 @@ def buildSubmitterLayout(widget):
 
     generalTabWidget = PySide.QtGui.QWidget()
     tabwidget.addTab(generalTabWidget, 'Submit')
-
-
     generalLayout = QVBoxLayout(generalTabWidget)
 
     generalLayout.addWidget(frameRangeOutline)
@@ -400,12 +501,14 @@ def buildSubmitterLayout(widget):
     generalLayout.addWidget(renderJobOutline)
     generalLayout.addWidget(renderPassOutline)
     generalLayout.addWidget(imageNameOutline)
+    outPatternRefresh= QPushButton('Preview Image Name')
+    outPatternRefresh.clicked.connect(updateOutPatternPreview)
+    generalLayout.addWidget(outPatternRefresh)
     generalLayout.addWidget(outPatternPreview)
 
 
 
-
-    masterLayout.addWidget(renderButton)
+    generalLayout.addWidget(renderButton)
 
     widget.setLayout(masterLayout)
     updateOutPatternPreview()
