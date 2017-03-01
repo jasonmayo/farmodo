@@ -5,9 +5,8 @@ import os
 import socket
 from datetime import date, datetime
 import platform
-import blt_farm
 import modo
-
+import constants
 global renderJobId
 
 jobsPending = True
@@ -16,7 +15,7 @@ def renderJob(job):    #render.animation this job
     debug = "0"
     # usage @modoRenderSubmit path/to/scene start end step output/path format -pass "comma,sep,text" -camera default -pattern default
     if job:
-        renderJobId = job[0]
+        renderJobId = job[JOBID]
     else:
         print "no job"
         return True
@@ -29,18 +28,18 @@ def renderJob(job):    #render.animation this job
     lx.out("DEBUG LEVEL %s" % debug)
     lx.eval("log.toConsole true")
     lx.eval("log.toConsoleRolling true")
-    lx.out("scenefile: %s " % job[1])
-    lx.out("start: %s " % job[2])
-    lx.out("end: %s " % job[3])
-    lx.out("step: %s " % job[4])
-    lx.out("camera: %s " % job[5])
-    lx.out("initialPass: %s " % job[6])
-    lx.out("passes: %s " % job[7])
-    lx.out("passGroup: %s " % job[8])
-    lx.out("imageFile: %s " % job[9])
-    lx.out("imageFormat: %s " % job[10])
+    lx.out("scenefile: %s " % job[SCENE])
+    lx.out("start: %s " % job[JOBSTART])
+    lx.out("end: %s " % job[JOBEND])
+    lx.out("step: %s " % job[JOBSTEP])
+    lx.out("camera: %s " % job[CAMERA])
+    lx.out("initialPass: %s " % job[INITIAL_PASS])
+    lx.out("passes: %s " % job[PASS])
+    lx.out("passGroup: %s " % job[PASSGRP])
+    lx.out("imageFile: %s " % job[IMAGEFILE])
+    lx.out("imageFormat: %s " % job[IMAGEFORMAT])
 
-    passGroup = job[8]
+    passGroup = job[PASSGRP]
 
     # # # # # #
     #scene open
@@ -48,10 +47,10 @@ def renderJob(job):    #render.animation this job
 
     try:
 
-        lx.eval("scene.open %s normal" % job[1])
+        lx.eval("scene.open %s normal" % job[SCENE])
         scene = modo.Scene()
         #camera option
-        renderCam = job[5]
+        renderCam = job[CAMERA]
         for camera in scene.cameras: # now search for it thoroughly, it may have been suffixed when imported as a reference
             if renderCam in camera.name:
                 renderCam = camera.name
@@ -153,15 +152,19 @@ def renderJob(job):    #render.animation this job
 
 def jobAssignedToThisNode():
     #get job assigned to this node, there can only be one
+    jobD={}
     conn = sqlite3.connect(lx.eval("user.value farmodo_pathToDB ?"))
     lx.out("Retrieving assigned job")
     username = socket.gethostname()
     cur = conn.cursor()
-    cur.execute('SELECT * FROM renderJobs WHERE username = "%s",status ="%s" '  % (username,'rendering'):
+    cur.execute('PRAGMA table_info (renderJobs)')
+    pragma =cur.fetchall()
+    cur.execute('SELECT * FROM renderJobs WHERE username = "%s" AND status = "%s" '  % (username,"rendering"))
     job=cur.fetchone()
     conn.close()
-    return job
-
+    for i in range(len(job)):
+	    jobD[pragma[i][1]]=job[i]
+    return jobD
 
 
 
