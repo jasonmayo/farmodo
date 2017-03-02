@@ -27,10 +27,11 @@ imageFormatInternalName = ['']
 imageFormatUserName = ['']
 imageFormatSuffix = ['']
 imagePathEdit = QLineEdit()
-guiStart = 0
-spinBoxStart = QSpinBox()
-spinBoxEnd = QSpinBox()
-spinBoxStep = QSpinBox()
+startValue = 0
+endValue = 0
+stepValue = 0
+
+
 jobsPerStep = QCheckBox('Job per Step')
 passList = {}
 initialPass = {}
@@ -160,7 +161,7 @@ def updateOutPatternPreview():
     passList = layoutWidgetQuery(renderPassLayout)
     initialPass = layoutWidgetQuery(renderJobLayout)
     cameraList = layoutWidgetQuery(cameraRadioButtonLayout)
-    for eachRange in frameRangesByStep(spinBoxStart.value(),spinBoxEnd.value(),spinBoxStep.value()):
+    for eachRange in frameRangesByStep(startValue,endValue,stepValue):
         for eachCamera in cameraList[cameraList.keys()[0]]:
             for eachJob in initialPass[initialPass.keys()[0]]:
                 outPatList += 'job#'+ str(j) +'\n'
@@ -351,38 +352,42 @@ def makeRenderPassCheckboxes(index):
 
 
 def buildSubmitterLayout(widget):
-
-    # try:
-    #     cssString = QString('')
-    # except:
-    #     QString = type("")
-    #     cssString = QString("")
-    #
-    # with open((os.path.split(__file__)[0] + '/style.css'), 'r') as cssFile:
-    #     cssString = QString(cssFile.read())
-
-    #widget.setStyleSheet(cssString)
+    """Build a QtGUi view to prepare for submission to render farm"""
 
     widget.setStyleSheet("QGroupBox {border-image: none; border-style: solid; border-radius : 6px;border-width: 1px ; border-color: #353535}")
     scene = modo.Scene()
     renderItem = scene.renderItem
     #frame range buttons
+    spinBoxStart = QSpinBox()
+    spinBoxEnd = QSpinBox()
+    stepFormLayout = QFormLayout()
+    spinBoxStep = QSpinBox()
+    def setFrameRange():
+        print"set frame ranges?"
+        print message
+        startValue = (startBoxEnd.value())
+        endValue = (spinBoxEnd.value())
+        stepValue = (spinBoxStep.value())
+        updateOutPatternPreview
+
     spinBoxStart.setFont(BIG_FONT)
     spinBoxStart.setRange(-999999, 999999)
     spinBoxStart.setValue(renderItem.channel('first').get())
-    spinBoxStart.editingFinished.connect(updateOutPatternPreview)
+    spinBoxStart.editingFinished.connect(lambda:setFrameRange())
+
     spinBoxEnd.setFont(BIG_FONT)
     spinBoxEnd.setRange(-999999, 999999)
     spinBoxEnd.setValue(renderItem.channel('last').get())
-    spinBoxEnd.editingFinished.connect(updateOutPatternPreview)
+    spinBoxEnd.editingFinished.connect(setFrameRange)
     spinBoxStep.setFont(BIG_FONT)
     spinBoxStep.setRange(0, 999999)
     spinBoxStep.setValue(renderItem.channel('step').get())
-    spinBoxStep.editingFinished.connect(updateOutPatternPreview)
-    stepFormLayout = QFormLayout()
+    spinBoxStep.editingFinished.connect(setFrameRange)
+
     jobsPerStep.setChecked(True)
     jobsPerStep.clicked.connect(updateOutPatternPreview)
     stepFormLayout.addRow(spinBoxStep,jobsPerStep)
+
 
     #render camera buttons
     cameraBox = QGroupBox('Render Camera')
