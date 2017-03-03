@@ -19,14 +19,13 @@ MEDIUM_FONT = QFont("Helvetica", 12,QFont.Bold)
 scene = modo.Scene()
 
 guiBuilt = False
-
 outPatternPreview = QTextBrowser()
-imageNameEdit = QLineEdit()
-imageFormatMenu = QComboBox()
+
+
 imageFormatInternalName = ['']
 imageFormatUserName = ['']
 imageFormatSuffix = ['']
-imagePathEdit = QLineEdit()
+
 
 guiSettings = {'start':scene.renderItem.channel('first').get(),'end':scene.renderItem.channel('last').get(), 'step':scene.renderItem.channel('step').get()}
 
@@ -38,8 +37,8 @@ cameraList = {}
 # initialPass = {'wheels':('steel')}
 
 
-def dict2Text(dict):
-	return str(dict).replace('{','').replace('}','').replace("'","").replace("(","").replace(")","").replace(" ","").replace("[","").replace("]","")
+def dictToCleanString(dict):
+    return str(dict).replace('{','').replace('}','').replace("'","").replace("(","").replace(")","").replace(" ","").replace("[","").replace("]","")
 
 def submitToDB():
     newId = 0
@@ -50,25 +49,27 @@ def submitToDB():
     conn = lite.connect(sqlite_file)
     cur = conn.cursor()
     newId = cur.lastrowid
-    job={}
-    passList = layoutWidgetQuery(renderPassLayout)
-    initialPass = layoutWidgetQuery(renderJobLayout)
-    cameraList = layoutWidgetQuery(cameraRadioButtonLayout)
-    imageFile = str(imagePathEdit.text()) + "/"+ str(imageNameEdit.text())
-    for eachRange in frameRangesByStep(spinBoxStart.value(),spinBoxEnd.value(),spinBoxStep.value()):
+    imageFile = guiSettings['imageFolder']+'/'+guiSettings['imageName']
+    imageFormatIndex = guiSettings.get('imageFormat_index',0)
+    imageName = guiSettings.get('imageName','Not Found')
+    passList = guiSettings.get('passList',None)
+    initialPass = guiSettings.get('initialPass',None)
+    cameraList = guiSettings.get('cameraList',None)
+
+    for eachRange in frameRangesByStep(guiSettings['start'],guiSettings['end'],guiSettings['step']):
         for eachCamera in cameraList[cameraList.keys()[0]]:
             for eachJob in initialPass[initialPass.keys()[0]]:
                 idNum = newId
                 first = eachRange.split('-')[0]
                 last = eachRange.split('-')[1]
-                step = str(spinBoxStep.value())
+                step = guiSettings['step']
                 scene = modo.Scene().filename
                 status = "pending"
                 now = datetime.now().strftime('%c')
                 priority = '1'
                 initialPassString = str(initialPass.keys()[0])+":"+eachJob
-                passListString = dict2Text(passList)
-                imageFormat = imageFormatSuffix[(imageFormatMenu.currentIndex())]
+                passListString = dictToCleanString(passList)
+                imageFormat = imageFormatSuffix[guiSettings['imageFormat_index']]
                 timeLimit = '200'
 
                 application = 'modo'
@@ -82,15 +83,81 @@ def submitToDB():
     conn.close()
 
 
+
+    #
+    #
+    #
+    #
+    #
+    #             outPatList += 'job#'+ str(j) +'\n'
+    #             j+=1
+    #             for eachPass in passList[passList.keys()[0]]:
+    #                 for eachOutput in renderOutputQuery(True):
+    #                     currentPat = imageName + scene.renderItem.channel('outPat').get()
+    #                     currentPat = replaceFsWithFrameRange(currentPat, eachRange.split('-')[0],eachRange.split('-')[1])
+    #                     renderOutput =  eachOutput
+    #                     currentPat = currentPat.replace('[','')
+    #                     currentPat = currentPat.replace(']','')
+    #                     currentPat = currentPat.replace('<pass>',eachPass)
+    #                     currentPat = currentPat.replace('<initialPass>',eachJob)
+    #                     currentPat = currentPat.replace('<output>',renderOutput)
+    #                     currentPat = currentPat.replace('<LR>',LRCam)
+    #                     currentPat = currentPat.replace('<camera>',eachCamera)
+    #                     currentPat = currentPat.replace('<none>','')
+    #                     currentPat  += '.' + imageFormatSuffix[imageFormatIndex]
+    #                     currentPat += '\n'
+    #                     outPatList += currentPat
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    #
+    # job={}
+    # passList = layoutWidgetQuery(renderPassLayout)
+    # initialPass = layoutWidgetQuery(renderJobLayout)
+    # cameraList = layoutWidgetQuery(cameraRadioButtonLayout)
+    # imageFile = str(imageFolderEdit.text()) + "/"+ str(imageNameEdit.text())
+    # for eachRange in frameRangesByStep(spinBoxStart.value(),spinBoxEnd.value(),spinBoxStep.value()):
+    #     for eachCamera in cameraList[cameraList.keys()[0]]:
+    #         for eachJob in initialPass[initialPass.keys()[0]]:
+    #             idNum = newId
+    #             first = eachRange.split('-')[0]
+    #             last = eachRange.split('-')[1]
+    #             step = str(spinBoxStep.value())
+    #             scene = modo.Scene().filename
+    #             status = "pending"
+    #             now = datetime.now().strftime('%c')
+    #             priority = '1'
+    #             initialPassString = str(initialPass.keys()[0])+":"+eachJob
+    #             passListString = dict2Text(passList)
+    #             imageFormat = imageFormatSuffix[(imageFormatMenu.currentIndex())]
+    #             timeLimit = '200'
+    #
+    #             application = 'modo'
+    #             camera = eachCamera
+    #             cur.execute("INSERT INTO renderJobs(id,scenePath,start,end,step,camera,initialPass,passes,imageFile,imageFormat,status,timeSubmitted,timeLimit,priority,application) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(idNum,scene,first,last,step,camera,initialPassString,passListString,imageFile,imageFormat,status,now,timeLimit,priority,application))
+    #             if cur.lastrowid:
+    #                 lx.out("job submitted with id %s" % (cur.lastrowid))
+    #                 newId = cur.lastrowid +1
+
+
+
+
 def frameRangesByStep(first,last,step):
+
     ranges=[]
-    frames = (last+1) - first
+    frames = (last) - (first-1)
     if step <1:
-    	step =1
-    if jobsPerStep:
+        step =1
+    if guiSettings.get('jobsPerStep',True):
         for i in range(step):
-        	print first + i
-        	ranges.append(str(first + i) + '-' + str(frames-((last)-(first+i))%step))
+            numFrames = last-(first+i)
+            ranges.append(str(first + i) + '-' + str(last-(numFrames%step)))
     else:
         ranges.append(str(first)+ '-' +str(last))
     return ranges
@@ -121,15 +188,18 @@ def replaceFsWithFrameRange(outPat,start,end):
 
 def updateOutPatternPreview():
     print'Update out pattern preview'
-    print str(guiSettings)
+    for eachKey in guiSettings.keys():
+        print eachKey + ":    " + str(guiSettings[eachKey])
     scene = modo.Scene()
     imageNameList=''
-    imageName = imageNameEdit.text()
-    imageFormat = imageFormatInternalName[(imageFormatMenu.currentIndex())]
+
+
     LRCam = ''
     i=0
     j=1
     outPatList=''
+    imageFormatIndex = guiSettings.get('imageFormat_index',0)
+    imageName = guiSettings.get('imageName','Not Found')
     passList = guiSettings.get('passList',None)
     initialPass = guiSettings.get('initialPass',None)
     cameraList = guiSettings.get('cameraList',None)
@@ -152,7 +222,7 @@ def updateOutPatternPreview():
                         currentPat = currentPat.replace('<LR>',LRCam)
                         currentPat = currentPat.replace('<camera>',eachCamera)
                         currentPat = currentPat.replace('<none>','')
-                        currentPat  += '.' + imageFormatSuffix[(imageFormatMenu.currentIndex())]
+                        currentPat  += '.' + imageFormatSuffix[imageFormatIndex]
                         currentPat += '\n'
                         outPatList += currentPat
     print outPatList
@@ -223,10 +293,11 @@ def get_imagesavers():
     return savers
 
 
-def getImageFolder():
+def getImageFolder(widget):
 
-    imageDir = QFileDialog.getExistingDirectory(None,("Open Directory"),("~/Pictures"),QFileDialog.ShowDirsOnly);
-    imagePathEdit.setText(imageDir)
+    imageFolder = QFileDialog.getExistingDirectory(None,("Open Directory"),("~/Pictures"),QFileDialog.ShowDirsOnly);
+    widget.setText(str(imageFolder))
+    guiSettings['imageFolder']= str(imageFolder)
 
 def makeRenderJobCheckboxes(index,layout):
     print 'index: '+ str(index)
@@ -265,11 +336,19 @@ def makeRenderPassCheckboxes(index,layout):
     layoutWidgetQuery(layout,'passList')
 
 def storeGuiSettings(widget,key):
-	if 'QSpinBox' in  str(widget.__class__):
-		guiSettings[key] = widget.value()
-	elif 'QCheckBox' in str(widget.__class__):
-		guiSettings[key] = bool(widget.checkState())
-	print guiSettings[key]
+    if 'QSpinBox' in  str(widget.__class__):
+        guiSettings[key] = widget.value()
+    elif 'QCheckBox' in str(widget.__class__):
+        guiSettings[key] = bool(widget.checkState())
+    elif 'QLineEdit' in str(widget.__class__):
+        guiSettings[key] = str(widget.text())
+    elif 'QComboBox' in str(widget.__class__):
+        guiSettings[key + '_index'] = int(widget.currentIndex())
+        guiSettings[key +'_text'] = str(widget.currentText())
+
+    print str(guiSettings)
+    if guiBuilt:
+        updateOutPatternPreview()
 
 
 def buildSubmitterLayout(widget):
@@ -288,7 +367,6 @@ def buildSubmitterLayout(widget):
     spinBoxStart.setFont(BIG_FONT)
     spinBoxStart.setRange(-999999, 999999)
     spinBoxStart.setValue(guiSettings['start'])
-
     spinBoxStart.editingFinished.connect(lambda:storeGuiSettings(spinBoxStart,"start"))
 
 
@@ -299,7 +377,7 @@ def buildSubmitterLayout(widget):
     spinBoxStep.setFont(BIG_FONT)
     spinBoxStep.setRange(1, 999999)
     spinBoxStep.setValue(guiSettings['step'])
-    spinBoxEnd.editingFinished.connect(lambda:storeGuiSettings(spinBoxStep,"step"))
+    spinBoxStep.editingFinished.connect(lambda:storeGuiSettings(spinBoxStep,"step"))
     jobsPerStep = QCheckBox('Job per Step')
     jobsPerStep.setChecked(True)
     jobsPerStep.clicked.connect(lambda:storeGuiSettings(jobsPerStep,"jobsPerStep"))
@@ -370,40 +448,45 @@ def buildSubmitterLayout(widget):
     #make imagename box using scene name as default
     imageNameOutline = QGroupBox('Image Name')
     imageNameLayout = QVBoxLayout()
-    imageFormLayout = QFormLayout()
-    imageNameOutline.setLayout(imageFormLayout)
-    # imageNameOutline.setLayout(imageNameLayout)
+    imageNameEdit = QLineEdit()
     imageNameEdit.setText((scene.name).rsplit( ".", 1 )[ 0 ])
-    #make image path browser layout
+    imageNameEdit.textChanged.connect(lambda:storeGuiSettings(imageFolderEdit,"imageName"))
+    storeGuiSettings(imageNameEdit,"imageName")
+
+    imageFolderEdit = QLineEdit()
     proj = lx.service.File()
     try:
         defaultPath= (proj.FileSystemPath(lx.symbol.sSYSTEM_PATH_PROJECT))
         defaultPath += "/Renders/Frames/"
     except:
         defaultPath =''
+        imageFolderEdit.setText(defaultPath)
+    storeGuiSettings(imageFolderEdit,"imageFolder")
+    imageFolderBrowse = QPushButton("browse")
+    imageFolderBrowse.clicked.connect(lambda:getImageFolder(imageFolderEdit))
+    imageFormLayout = QFormLayout()
 
-    imagePathEdit.setText(defaultPath)
-    imagePathBrowse = QPushButton("browse")
-    imagePathBrowse.clicked.connect(farmodo.getImageFolder)
-
+    imageNameOutline.setLayout(imageFormLayout)
     imageFormLayout.addRow('Base Name',imageNameEdit)
     imageBrowseFormLayout=QFormLayout()
-    imageBrowseFormLayout.addRow(imagePathBrowse,imagePathEdit)
+    imageBrowseFormLayout.addRow(imageFolderBrowse,imageFolderEdit)
     imageFormLayout.addRow("Folder",imageBrowseFormLayout)
-    imageFormLayout.addRow('Format',imageFormatMenu)
 
 
     #make image format menu
-    imageFormatList = farmodo.get_imagesavers()
+    imageFormatMenu = QComboBox()
+    imageFormLayout.addRow('Format',imageFormatMenu)
+    imageFormatList = get_imagesavers()
     for tpl in imageFormatList:
         imageFormatInternalName.append(tpl[0])
         imageFormatUserName.append(tpl[1])
         imageFormatSuffix.append(tpl[2])
     imageFormatMenu.addItems(imageFormatUserName)
-    imageFormatMenu.currentIndexChanged.connect(updateOutPatternPreview)
+    imageFormatMenu.currentIndexChanged.connect(lambda:storeGuiSettings(imageFormatMenu,'imageFormat'))
     imageFormatMenu.setCurrentIndex(7)
+    storeGuiSettings(imageFormatMenu,'imageFormat')
 
-    imageNameEdit.textChanged.connect(updateOutPatternPreview)
+
 
     # create main layout
     masterLayout = PySide.QtGui.QVBoxLayout()
@@ -428,6 +511,7 @@ def buildSubmitterLayout(widget):
     generalLayout.addWidget(imageNameOutline)
     outPatternRefresh= QPushButton('Preview Image Name')
     outPatternRefresh.clicked.connect(updateOutPatternPreview)
+
     generalLayout.addWidget(outPatternRefresh)
     generalLayout.addWidget(outPatternPreview)
 
@@ -440,9 +524,11 @@ def buildSubmitterLayout(widget):
     generalLayout.addWidget(renderButton)
 
     widget.setLayout(masterLayout)
+    # set Gui as built and ready for pattern updates
     print'**GUI BUILT***'
     global guiBuilt
     guiBuilt = True
+    updateOutPatternPreview()
 
 if __name__ == '__main__':
     print "This only executes when is executed rather than imported"
