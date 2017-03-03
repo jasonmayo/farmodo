@@ -20,7 +20,7 @@ class showSubmitterGUI(lxu.command.BasicCommand):
 
     def basic_Execute(self, msg, flags):
         reload(farmodo)
-        lx.eval('layout.createOrClose open:True cookie:farmodoSubmitterCookie layout:farmodoSubmitterLayout width:250 height:600 style:palette title:{Render Farm}')
+        lx.eval('layout.createOrClose open:True cookie:farmodoSubmitterCookie layout:farmodoSubmitterLayout width:300 height:750 style:palette title:{Render Farm}')
         lx.eval('select.viewportInWindow cookie:farmodoSubmitterCookie')
         lx.eval('customview.view farmodo.submitterGUI')
 
