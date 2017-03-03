@@ -404,7 +404,7 @@ def buildSubmitterLayout(widget):
     imageFormatMenu.setCurrentIndex(7)
 
     imageNameEdit.textChanged.connect(updateOutPatternPreview)
-    
+
     # create main layout
     masterLayout = PySide.QtGui.QVBoxLayout()
     renderButton = QPushButton("Submit")
@@ -435,8 +435,8 @@ def buildSubmitterLayout(widget):
     layoutWidgetQuery(renderJobLayout,'initialPass')
     layoutWidgetQuery(renderPassLayout,'passList')
     layoutWidgetQuery(cameraRadioButtonLayout,'cameraList')
-    
-    
+
+
     generalLayout.addWidget(renderButton)
 
     widget.setLayout(masterLayout)
