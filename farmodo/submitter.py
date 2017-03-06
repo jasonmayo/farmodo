@@ -6,7 +6,6 @@ import modo
 import PySide
 from PySide.QtGui import *
 from PySide.QtCore import *
-from PySide.QtSql import *
 import farmodo
 import os
 import re
@@ -15,9 +14,9 @@ import sqlite3 as lite
 
 BIG_FONT = QFont("Helvetica", 18,QFont.Bold)
 MEDIUM_FONT = QFont("Helvetica", 12,QFont.Bold)
-
-scene = modo.Scene()
-
+#
+# scene = modo.Scene()
+#
 guiBuilt = False
 outPatternPreview = QTextBrowser()
 
@@ -26,15 +25,11 @@ imageFormatInternalName = ['']
 imageFormatUserName = ['']
 imageFormatSuffix = ['']
 
-
-guiSettings = {'start':scene.renderItem.channel('first').get(),'end':scene.renderItem.channel('last').get(), 'step':scene.renderItem.channel('step').get()}
+guiSettings={}
 
 passList = {}
 initialPass = {}
 cameraList = {}
-
-# passList = {'colour':('red','black','blue')}
-# initialPass = {'wheels':('steel')}
 
 
 def dictToCleanString(dict):
@@ -83,75 +78,9 @@ def submitToDB():
     conn.close()
 
 
-
-    #
-    #
-    #
-    #
-    #
-    #             outPatList += 'job#'+ str(j) +'\n'
-    #             j+=1
-    #             for eachPass in passList[passList.keys()[0]]:
-    #                 for eachOutput in renderOutputQuery(True):
-    #                     currentPat = imageName + scene.renderItem.channel('outPat').get()
-    #                     currentPat = replaceFsWithFrameRange(currentPat, eachRange.split('-')[0],eachRange.split('-')[1])
-    #                     renderOutput =  eachOutput
-    #                     currentPat = currentPat.replace('[','')
-    #                     currentPat = currentPat.replace(']','')
-    #                     currentPat = currentPat.replace('<pass>',eachPass)
-    #                     currentPat = currentPat.replace('<initialPass>',eachJob)
-    #                     currentPat = currentPat.replace('<output>',renderOutput)
-    #                     currentPat = currentPat.replace('<LR>',LRCam)
-    #                     currentPat = currentPat.replace('<camera>',eachCamera)
-    #                     currentPat = currentPat.replace('<none>','')
-    #                     currentPat  += '.' + imageFormatSuffix[imageFormatIndex]
-    #                     currentPat += '\n'
-    #                     outPatList += currentPat
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    #
-    # job={}
-    # passList = layoutWidgetQuery(renderPassLayout)
-    # initialPass = layoutWidgetQuery(renderJobLayout)
-    # cameraList = layoutWidgetQuery(cameraRadioButtonLayout)
-    # imageFile = str(imageFolderEdit.text()) + "/"+ str(imageNameEdit.text())
-    # for eachRange in frameRangesByStep(spinBoxStart.value(),spinBoxEnd.value(),spinBoxStep.value()):
-    #     for eachCamera in cameraList[cameraList.keys()[0]]:
-    #         for eachJob in initialPass[initialPass.keys()[0]]:
-    #             idNum = newId
-    #             first = eachRange.split('-')[0]
-    #             last = eachRange.split('-')[1]
-    #             step = str(spinBoxStep.value())
-    #             scene = modo.Scene().filename
-    #             status = "pending"
-    #             now = datetime.now().strftime('%c')
-    #             priority = '1'
-    #             initialPassString = str(initialPass.keys()[0])+":"+eachJob
-    #             passListString = dict2Text(passList)
-    #             imageFormat = imageFormatSuffix[(imageFormatMenu.currentIndex())]
-    #             timeLimit = '200'
-    #
-    #             application = 'modo'
-    #             camera = eachCamera
-    #             cur.execute("INSERT INTO renderJobs(id,scenePath,start,end,step,camera,initialPass,passes,imageFile,imageFormat,status,timeSubmitted,timeLimit,priority,application) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(idNum,scene,first,last,step,camera,initialPassString,passListString,imageFile,imageFormat,status,now,timeLimit,priority,application))
-    #             if cur.lastrowid:
-    #                 lx.out("job submitted with id %s" % (cur.lastrowid))
-    #                 newId = cur.lastrowid +1
-
-
-
-
 def frameRangesByStep(first,last,step):
 
     ranges=[]
-    frames = (last) - (first-1)
     if step <1:
         step =1
     if guiSettings.get('jobsPerStep',True):
@@ -241,8 +170,6 @@ def renderOutputQuery(noAlpha):
     return(outputList)
 
 def layoutWidgetQuery(layout,guiSettingKey):
-    """adds a dict to guiSettings dict, containing another dict with a single
-    key to a list of controls representing passes usually"""
     scene = modo.Scene()
     layers=[]
     key = ''
@@ -351,12 +278,42 @@ def storeGuiSettings(widget,key):
         updateOutPatternPreview()
 
 
-def buildSubmitterLayout(widget):
-    """Build a QtGUi view to prepare for submission to render farm"""
+def createDBView():
+    model = QStandardItemModel()
+    model.setColumnCount(2)
+    headerList = "Scene File,Image File,Status,User Name,KILL JOB"
+    headerNames = []
+    for eachHeader in headerList.split(','):
+        headerNames.append(eachHeader)
+    model.setHorizontalHeaderLabels(headerNames)
 
+    sqlite_file = "/Users/jasonmayo/Downloads/database/blottoTestFarmDB.db"
+    conn = lite.connect(sqlite_file)
+    cur = conn.cursor()
+    cur.execute('SELECT "scenePath","imageFile","status","username" FROM renderJobs')
+    data=cur.fetchall()
+    conn.close()
+    for eachrow in data:
+        row=[]
+        for eachitem in eachrow:
+            item = QStandardItem(eachitem)
+            item.setEditable(False)
+            row.append(item)
+        row.append(QStandardItem("KILL"))
+        model.appendRow(row)
+
+    view = QTableView()
+    view.setModel(model)
+    view.setWindowTitle("Farm")
+    return view
+
+def buildSubmitterLayout(widget):
     widget.setStyleSheet("QGroupBox {border-image: none; border-style: solid; border-radius : 6px;border-width: 1px ; border-color: #353535}")
     scene = modo.Scene()
     renderItem = scene.renderItem
+    global guiSettings
+    guiSettings = {'start':renderItem.channel('first').get(),'end':renderItem.channel('last').get(), 'step':renderItem.channel('step').get()}
+
     #frame range buttons
     spinBoxStart = QSpinBox()
     spinBoxEnd = QSpinBox()
@@ -496,14 +453,19 @@ def buildSubmitterLayout(widget):
     renderButton.clicked.connect(farmodo.submitToDB)
 
     #making tabbed widget
-
     tabwidget = QTabWidget()
     masterLayout.addWidget(tabwidget)
-
     generalTabWidget = PySide.QtGui.QWidget()
     tabwidget.addTab(generalTabWidget, 'Submit')
-    generalLayout = QVBoxLayout(generalTabWidget)
+    # make farm sqlite database tab
+    farmTabWidget = PySide.QtGui.QWidget()
+    tabwidget.addTab(farmTabWidget, 'Farm')
 
+    farmLayout = QVBoxLayout(farmTabWidget)
+
+    farmLayout.addWidget(createDBView())
+
+    generalLayout = QVBoxLayout(generalTabWidget)
     generalLayout.addWidget(frameRangeOutline)
     generalLayout.addWidget(cameraBox)
     generalLayout.addWidget(renderJobOutline)

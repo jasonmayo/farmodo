@@ -191,7 +191,7 @@ def jobAssignedToThisNode():
     conn.close()
     if job:
         for i in range(len(job)):
-    	    jobD[pragma[i][1]]=job[i]
+            jobD[pragma[i][1]]=job[i]
     return jobD
 
 
